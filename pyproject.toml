@@ -1,7 +1,7 @@
 [project]
 name = "log-analyser"
 version = "0.1.0"
-description = "Add your description here"
+description = "Analyseur de logs Linux/SSH avec enrichissement IPinfo et graphiques"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

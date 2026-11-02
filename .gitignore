@@ -6,5 +6,9 @@ dist/
 wheels/
 *.egg-info
 
+# Secrets et résultats locaux
+.env
+results/
+
 # Virtual environments
 .venv

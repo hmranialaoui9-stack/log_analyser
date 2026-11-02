@@ -1,19 +1,44 @@
+"""Lecture des fichiers de logs texte et gzip."""
+from __future__ import annotations
+
 import gzip
-import os
-"""
-raed data logs from data directory as rows 
-"""
+import tarfile
+from pathlib import Path
 
 
-def toRows(path):
-    files=os.listdir(path)
+def toRows(path: str | Path) -> list[str]:
+    """Retourne toutes les lignes d'un fichier ou de tous les fichiers d'un dossier.
 
-    for file in files :
-        file_path=path+'/'+file
-        openner=gzip.open(filename=file_path,mode='rt',encoding='utf-8') if file.endswith('.gz') else open(file_path)
-        with openner as f :
-            rows=f.readlines()
+    Les fichiers gzip sont reconnus par leur extension ou leur signature, ce qui
+    permet aussi de lire un auth.log compressé dont le nom n'a pas d'extension.
+    Les fichiers invalides sont ignorés sans interrompre l'analyse.
+    """
+    source = Path(path)
+    if not source.exists():
+        raise FileNotFoundError(f"Chemin introuvable : {source}")
+    files = sorted(p for p in source.iterdir() if p.is_file()) if source.is_dir() else [source]
+    rows: list[str] = []
+    for file_path in files:
+        try:
+            if tarfile.is_tarfile(file_path):
+                with tarfile.open(file_path, "r:*") as archive:
+                    for member in archive.getmembers():
+                        if not member.isfile():
+                            continue
+                        stream = archive.extractfile(member)
+                        if stream is not None:
+                            with stream:
+                                rows.extend(stream.read().decode("utf-8", errors="replace").splitlines(keepends=True))
+                continue
+            with file_path.open("rb") as probe:
+                compressed = file_path.suffix == ".gz" or probe.read(2) == b"\x1f\x8b"
+            opener = gzip.open if compressed else open
+            with opener(file_path, "rt", encoding="utf-8", errors="replace") as stream:
+                rows.extend(stream)
+        except (OSError, EOFError, gzip.BadGzipFile) as exc:
+            print(f"Avertissement : fichier ignoré ({file_path}) : {exc}")
     return rows
 
-if __name__=='__main__':
-    print(toRows('./data')[:10])
+
+if __name__ == "__main__":
+    print("Lignes lues :", len(toRows("./data")))
