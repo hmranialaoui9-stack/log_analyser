@@ -9,6 +9,15 @@ wheels/
 # Secrets et résultats locaux
 .env
 results/
+logs/
+storage/log_analyser.sqlite3
+storage/log_analyser.sqlite3-wal
+storage/log_analyser.sqlite3-shm
+storage/log_analyser.sqlite3-journal
 
 # Virtual environments
 .venv
+
+# Configuration locale des assistants de développement
+.agents/
+.claude/
