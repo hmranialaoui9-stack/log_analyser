@@ -12,6 +12,15 @@ MONTHS = {name: index for index, name in enumerate(
 )}
 IP_RE = re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.])|(?<![\w:])(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}(?![\w:])")
 STAMP_RE = re.compile(r"^(\w{3})\s+(\d{1,2})\s+(\d{2}:\d{2}:\d{2})")
+INVALID_USER_RE = re.compile(r"\binvalid user\s+(?!from\b)([^\s]+)", re.IGNORECASE)
+INVALID_USER_MARKER_RE = re.compile(r"\binvalid user\b", re.IGNORECASE)
+FOR_USER_RE = re.compile(r"\bfor\s+(?:invalid user\s+)?([^\s]+)", re.IGNORECASE)
+USER_ASSIGNMENT_RE = re.compile(r"\buser=([^\s]+)", re.IGNORECASE)
+AUTHENTICATING_USER_RE = re.compile(r"\bauthenticating user\s+([^\s]+)", re.IGNORECASE)
+REPEATED_MESSAGE_RE = re.compile(
+    r"\bmessage repeated\s+(\d+)\s+times:\s*\[\s*(.*?)\s*\]\s*$",
+    re.IGNORECASE,
+)
 
 
 def _event(row: str, year: int | None = None) -> dict[str, Any]:
@@ -35,20 +44,42 @@ def _event(row: str, year: int | None = None) -> dict[str, Any]:
         except ValueError:
             continue
     lowered = row.lower()
-    if "sshd" in lowered:
-        category = "ssh"
-        if any(s in lowered for s in ("accepted password", "accepted publickey", "accepted keyboard-interactive")):
+    category = "ssh" if "sshd" in lowered else "other"
+    if category == "ssh":
+        if any(s in lowered for s in (
+            "accepted password",
+            "accepted publickey",
+            "accepted keyboard-interactive",
+        )):
             outcome = "success"
-        elif any(s in lowered for s in ("failed password", "invalid user", "authentication failure", "maximum authentication attempts")):
+        elif any(s in lowered for s in (
+            "failed password",
+            "invalid user",
+            "authentication failure",
+            "maximum authentication attempts",
+            "more authentication failures",
+            "check pass; user unknown",
+            "ignoring max retries",
+        )):
             outcome = "failure"
         else:
             outcome = "other"
     else:
-        category, outcome = "other", "other"
-    user_match = re.search(r"(?:for (?:invalid user )?|user=)([^\s]+)", row, re.IGNORECASE)
+        outcome = "other"
+
+    invalid_user_match = INVALID_USER_RE.search(row)
+    user_match = (
+        invalid_user_match
+        or FOR_USER_RE.search(row)
+        or USER_ASSIGNMENT_RE.search(row)
+        or AUTHENTICATING_USER_RE.search(row)
+    )
     return {
         "timestamp": timestamp, "category": category, "outcome": outcome,
-        "ips": ips, "user": user_match.group(1) if user_match else None, "message": row,
+        "ips": ips,
+        "user": user_match.group(1) if user_match else None,
+        "invalid_user": bool(INVALID_USER_MARKER_RE.search(row)),
+        "message": row,
     }
 
 
@@ -63,7 +94,27 @@ def analyze_rows(rows: list[str], year: int | None = None) -> list[dict[str, Any
     """Analyse toutes les lignes et renvoie uniquement les lignes non vides."""
     # Évite de recalculer l'année courante pour chaque ligne d'une archive volumineuse.
     analysis_year = year if year is not None else datetime.now().year
-    return [_event(row, analysis_year) for row in rows if isinstance(row, str) and row.strip()]
+    events: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, str) or not row.strip():
+            continue
+        repeated = REPEATED_MESSAGE_RE.search(row.rstrip("\r\n"))
+        if not repeated:
+            events.append(_event(row, analysis_year))
+            continue
+        repeat_count = int(repeated.group(1))
+        if repeat_count <= 0:
+            events.append(_event(row, analysis_year))
+            continue
+        stamp = STAMP_RE.match(row)
+        prefix = row[:stamp.end()] if stamp else ""
+        repeated_event = _event(
+            f"{prefix} sshd: {repeated.group(2)}",
+            analysis_year,
+        )
+        repeated_event["message"] = row.rstrip("\r\n")
+        events.extend(repeated_event.copy() for _ in range(repeat_count))
+    return events
 
 
 def summarize(events: list[dict[str, Any]], suspicious_threshold: int = 5) -> dict[str, Any]:
@@ -72,6 +123,8 @@ def summarize(events: list[dict[str, Any]], suspicious_threshold: int = 5) -> di
     Une IP est suspecte à partir de `suspicious_threshold` événements SSH en
     échec ; ce seuil est volontairement simple et visible dans le rapport.
     """
+    if suspicious_threshold < 1:
+        raise ValueError("suspicious_threshold doit être positif")
     ssh = [event for event in events if event["category"] == "ssh"]
     counts = Counter(ip for event in events for ip in event["ips"])
     failed = Counter(ip for event in ssh if event["outcome"] == "failure" for ip in event["ips"])

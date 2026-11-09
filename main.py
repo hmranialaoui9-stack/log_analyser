@@ -132,7 +132,10 @@ def run(input_path: str = "data", output_path: str = "results", year: int | None
     (output / "events.json").write_text(json.dumps(events, indent=2, ensure_ascii=False), encoding="utf-8")
     (output / "ipinfo.json").write_text(json.dumps(enriched, indent=2, ensure_ascii=False), encoding="utf-8")
     with (output / "events.csv").open("w", newline="", encoding="utf-8") as stream:
-        writer = csv.DictWriter(stream, fieldnames=["timestamp", "category", "outcome", "ips", "user", "message"])
+        writer = csv.DictWriter(
+            stream,
+            fieldnames=["timestamp", "category", "outcome", "ips", "user", "invalid_user", "message"],
+        )
         writer.writeheader()
         for event in events:
             writer.writerow({**event, "ips": ",".join(event["ips"])})
