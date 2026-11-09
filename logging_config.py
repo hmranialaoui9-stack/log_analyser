@@ -32,6 +32,13 @@ def redact_sensitive_text(text: str) -> str:
     return _redact(text)
 
 
+def csv_safe_value(value: object) -> object:
+    """Neutralise les valeurs textuelles interprétées comme tableur formulas."""
+    if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
+        return f"'{value}"
+    return value
+
+
 class RedactingFormatter(logging.Formatter):
     """Masque les secrets aussi dans les traces d'exception et les URLs."""
 

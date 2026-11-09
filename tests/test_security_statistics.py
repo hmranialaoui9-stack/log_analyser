@@ -7,7 +7,12 @@ import unittest
 
 from logging.handlers import RotatingFileHandler
 
-from logging_config import RedactingFormatter, get_logger, redact_sensitive_text
+from logging_config import (
+    RedactingFormatter,
+    csv_safe_value,
+    get_logger,
+    redact_sensitive_text,
+)
 from process.extract_transforme import analyze_rows, summarize
 
 
@@ -110,6 +115,12 @@ class SecurityStatisticsTests(unittest.TestCase):
         self.assertNotIn("abc123", redacted)
         self.assertNotIn("hunter2", redacted)
         self.assertNotIn("pass123", redacted)
+
+    def test_csv_values_cannot_start_spreadsheet_formulas(self) -> None:
+        for value in ("=SUM(A1:A2)", "+cmd", "-10", "@lookup"):
+            self.assertEqual(csv_safe_value(value), f"'{value}")
+        self.assertEqual(csv_safe_value("normal"), "normal")
+        self.assertEqual(csv_safe_value(10), 10)
 
     def test_logger_uses_rotating_redacting_handler_without_duplicates(self) -> None:
         first = get_logger("test_logging")

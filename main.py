@@ -19,7 +19,7 @@ os.environ.setdefault("MPLCONFIGDIR", str(_mpl_cache))
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from logging_config import get_logger
+from logging_config import csv_safe_value, get_logger, redact_sensitive_text
 from storage import get_database
 
 logger = get_logger("main")
@@ -136,8 +136,12 @@ def run(input_path: str = "data", output_path: str = "results", year: int | None
     )
     stats["enriched_public_ips"] = len(enriched)
     stats["ipinfo_enabled"] = bool(enrich and os.getenv("IPINFO_TOKEN"))
+    export_events = [
+        {**event, "message": redact_sensitive_text(event["message"])}
+        for event in events
+    ]
     (output / "summary.json").write_text(json.dumps(stats, indent=2, ensure_ascii=False), encoding="utf-8")
-    (output / "events.json").write_text(json.dumps(events, indent=2, ensure_ascii=False), encoding="utf-8")
+    (output / "events.json").write_text(json.dumps(export_events, indent=2, ensure_ascii=False), encoding="utf-8")
     (output / "ipinfo.json").write_text(json.dumps(enriched, indent=2, ensure_ascii=False), encoding="utf-8")
     with (output / "events.csv").open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(
@@ -145,8 +149,12 @@ def run(input_path: str = "data", output_path: str = "results", year: int | None
             fieldnames=["timestamp", "category", "outcome", "ips", "user", "invalid_user", "message"],
         )
         writer.writeheader()
-        for event in events:
-            writer.writerow({**event, "ips": ",".join(event["ips"])})
+        for event in export_events:
+            export_event = {
+                **event,
+                "ips": ",".join(event["ips"]),
+            }
+            writer.writerow({key: csv_safe_value(value) for key, value in export_event.items()})
     _charts(events, stats, enriched, output)
     with get_database() as database:
         run_id = database.create_run(

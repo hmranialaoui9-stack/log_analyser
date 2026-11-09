@@ -58,6 +58,14 @@ Le dashboard permet de sélectionner une analyse, consulter les statistiques,
 rechercher et filtrer les événements SSH, explorer les IP et télécharger les
 résultats de l'analyse sélectionnée.
 
+### Déploiement sécurisé du dashboard
+
+Le dashboard ne fournit pas d'authentification applicative intégrée. Pour un
+déploiement au-delà de la machine locale, il doit être placé derrière un
+reverse proxy avec authentification (OIDC, SSO ou contrôle d'accès équivalent)
+et ne doit pas être exposé directement sur Internet. Les exports CSV
+neutralisent les valeurs interprétées comme des formules par les tableurs.
+
 Les fichiers syslog usuels omettent l'année ; par défaut l'année courante est
 ajoutée aux timestamps. Utilisez `--year` pour les archives d'une autre année.
 Une IP est signalée comme suspecte à partir de cinq échecs SSH ; modifiez ce

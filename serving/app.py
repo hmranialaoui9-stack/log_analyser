@@ -19,7 +19,7 @@ if project_root in sys.path:
 sys.path.insert(0, project_root)
 
 from storage import get_database
-from logging_config import get_logger
+from logging_config import csv_safe_value, get_logger, redact_sensitive_text
 
 logger = get_logger("app")
 
@@ -81,7 +81,13 @@ else:
     summary = {}
     origin = "Aucune analyse enregistrée dans SQLite"
 
-st.markdown(f'<div class="hero"><div class="eyebrow">● SYSTEM ONLINE &nbsp; / &nbsp; {origin}</div><h1>Security Overview</h1><p>Surveillance et analyse des événements d’authentification Linux</p></div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="hero"><div class="eyebrow">● SYSTEM ONLINE</div>'
+    "<h1>Security Overview</h1>"
+    "<p>Surveillance et analyse des événements d’authentification Linux</p></div>",
+    unsafe_allow_html=True,
+)
+st.caption(f"Source des données : {origin}")
 if run is None:
     st.info("La base SQLite ne contient aucune analyse. Lancez `uv run python main.py`, puis rechargez la page.")
     st.stop()
@@ -161,8 +167,32 @@ elif page == "Événements":
     frame = pd.DataFrame(shown)
     st.caption(f"Page {page_number} · {len(shown):,} affiché(s) sur {total:,} événement(s) correspondant(s)")
     st.dataframe(frame, width="stretch", hide_index=True, height=520)
-    st.download_button("↓ Exporter CSV", frame.to_csv(index=False).encode("utf-8-sig"), "events.csv", "text/csv")
-    st.download_button("↓ Exporter JSON", json.dumps(shown, ensure_ascii=False, indent=2).encode("utf-8"), "events.json", "application/json")
+    csv_rows = [
+        {
+            key: csv_safe_value(
+                redact_sensitive_text(value) if key == "message" else value
+            )
+            for key, value in row.items()
+        }
+        for row in shown
+    ]
+    safe_frame = pd.DataFrame(csv_rows)
+    st.download_button(
+        "↓ Exporter CSV",
+        safe_frame.to_csv(index=False).encode("utf-8-sig"),
+        "events.csv",
+        "text/csv",
+    )
+    safe_json_events = [
+        {**event, "message": redact_sensitive_text(event["message"])}
+        for event in shown
+    ]
+    st.download_button(
+        "↓ Exporter JSON",
+        json.dumps(safe_json_events, ensure_ascii=False, indent=2).encode("utf-8"),
+        "events.json",
+        "application/json",
+    )
 
 elif page == "Analyse IP":
     st.subheader("Renseignement IP et géolocalisation")
@@ -188,6 +218,29 @@ else:
     c1, c2 = st.columns(2)
     export_rows, export_total = database_call(db.query_events, run["id"], limit=1_000_000)
     export_events = [{k: v for k, v in row.items() if k != "run_id"} for row in export_rows]
-    c1.download_button("Exporter les événements JSON", json.dumps(export_events, ensure_ascii=False, indent=2).encode(), "events.json", "application/json")
-    c2.download_button("Exporter les événements CSV", pd.DataFrame(export_events).to_csv(index=False).encode("utf-8-sig"), "events.csv", "text/csv")
+    safe_json_events = [
+        {**event, "message": redact_sensitive_text(event["message"])}
+        for event in export_events
+    ]
+    c1.download_button(
+        "Exporter les événements JSON",
+        json.dumps(safe_json_events, ensure_ascii=False, indent=2).encode(),
+        "events.json",
+        "application/json",
+    )
+    safe_export_events = [
+        {
+            key: csv_safe_value(
+                redact_sensitive_text(value) if key == "message" else value
+            )
+            for key, value in row.items()
+        }
+        for row in export_events
+    ]
+    c2.download_button(
+        "Exporter les événements CSV",
+        pd.DataFrame(safe_export_events).to_csv(index=False).encode("utf-8-sig"),
+        "events.csv",
+        "text/csv",
+    )
     st.caption(f"{export_total:,} événements présents dans cette analyse SQLite.")
