@@ -20,6 +20,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from logging_config import get_logger
+from storage import get_database
 
 logger = get_logger("main")
 
@@ -147,9 +148,19 @@ def run(input_path: str = "data", output_path: str = "results", year: int | None
         for event in events:
             writer.writerow({**event, "ips": ",".join(event["ips"])})
     _charts(events, stats, enriched, output)
+    with get_database() as database:
+        run_id = database.create_run(
+            source=str(Path(input_path).resolve()),
+            rows_analyzed=len(rows),
+            threshold=threshold,
+            summary=stats,
+            events=events,
+            enrichments=enriched,
+            ipinfo_status=account_status,
+        )
     logger.info(
-        "Analyse terminée: %d lignes, %d événements, %d IP uniques.",
-        len(rows), stats["total_events"], stats["unique_ips"],
+        "Analyse terminée: run_id=%d, %d lignes, %d événements, %d IP uniques.",
+        run_id, len(rows), stats["total_events"], stats["unique_ips"],
     )
     print(f"Analyse terminée : {len(rows)} lignes, {stats['total_events']} événements, {stats['unique_ips']} IP uniques.")
     print(f"Résultats : {output.resolve()}")

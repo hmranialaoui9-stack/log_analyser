@@ -45,6 +45,19 @@ de données. Le package `storage/` doit être présent dans le dépôt pour que
 le dashboard puisse fonctionner ; il fournit la connexion et les requêtes
 utilisées par `serving/app.py`.
 
+## Stockage SQLite
+
+Chaque exécution du CLI est enregistrée dans `storage/log_analyser.sqlite3`.
+La base est initialisée automatiquement et conserve les analyses, les
+événements, les adresses IP associées et les enrichissements IPinfo. Une
+empreinte de l'analyse empêche de créer deux fois la même exécution.
+Les tables existantes sont migrées de manière additive lorsque de nouvelles
+colonnes sont nécessaires ; aucune donnée existante n'est supprimée.
+
+Le dashboard permet de sélectionner une analyse, consulter les statistiques,
+rechercher et filtrer les événements SSH, explorer les IP et télécharger les
+résultats de l'analyse sélectionnée.
+
 Les fichiers syslog usuels omettent l'année ; par défaut l'année courante est
 ajoutée aux timestamps. Utilisez `--year` pour les archives d'une autre année.
 Une IP est signalée comme suspecte à partir de cinq échecs SSH ; modifiez ce
@@ -77,6 +90,8 @@ IPinfo n'est effectué et le statut indique que les requêtes sont désactivées
 - `main.py` orchestre l'analyse, les exports et les visualisations Matplotlib.
 - `serving/app.py` fournit le dashboard Streamlit à partir des analyses
   enregistrées dans la base de données.
+- `storage/repository.py` centralise les transactions SQLite et les requêtes
+  utilisées par le pipeline et le dashboard.
 
 Les fichiers invalides sont ignorés avec un avertissement ; un chemin d'entrée
 introuvable est signalé comme erreur CLI.
