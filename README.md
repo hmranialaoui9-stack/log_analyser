@@ -32,6 +32,19 @@ uv run python main.py ./mes-logs --output ./rapport --year 2025
 uv run python main.py data --no-enrich # interdit tout appel IPinfo
 ```
 
+## Dashboard
+
+Le dashboard Streamlit est lancé depuis la racine du projet :
+
+```bash
+uv run streamlit run serving/app.py
+```
+
+Il utilise les variables `DB_*` définies dans `.env` pour accéder à la base
+de données. Le package `storage/` doit être présent dans le dépôt pour que
+le dashboard puisse fonctionner ; il fournit la connexion et les requêtes
+utilisées par `serving/app.py`.
+
 Les fichiers syslog usuels omettent l'année ; par défaut l'année courante est
 ajoutée aux timestamps. Utilisez `--year` pour les archives d'une autre année.
 Une IP est signalée comme suspecte à partir de cinq échecs SSH ; modifiez ce
@@ -62,6 +75,8 @@ IPinfo n'est effectué et le statut indique que les requêtes sont désactivées
 - `process/geolocation.py` valide les IP, filtre les IP non publiques, appelle
   IPinfo avec `requests` et fournit les fonctions de cache.
 - `main.py` orchestre l'analyse, les exports et les visualisations Matplotlib.
+- `serving/app.py` fournit le dashboard Streamlit à partir des analyses
+  enregistrées dans la base de données.
 
 Les fichiers invalides sont ignorés avec un avertissement ; un chemin d'entrée
 introuvable est signalé comme erreur CLI.
