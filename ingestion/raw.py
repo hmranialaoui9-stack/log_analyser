@@ -5,6 +5,10 @@ import gzip
 import tarfile
 from pathlib import Path
 
+from logging_config import get_logger
+
+logger = get_logger("raw")
+
 
 def toRows(path: str | Path) -> list[str]:
     """Retourne toutes les lignes d'un fichier ou de tous les fichiers d'un dossier.
@@ -36,7 +40,7 @@ def toRows(path: str | Path) -> list[str]:
             with opener(file_path, "rt", encoding="utf-8", errors="replace") as stream:
                 rows.extend(stream)
         except (OSError, EOFError, gzip.BadGzipFile) as exc:
-            print(f"Avertissement : fichier ignoré ({file_path}) : {exc}")
+            logger.warning("Fichier ignoré (%s): %s", file_path, exc)
     return rows
 
 

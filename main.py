@@ -19,6 +19,11 @@ os.environ.setdefault("MPLCONFIGDIR", str(_mpl_cache))
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from logging_config import get_logger
+
+logger = get_logger("main")
+
+
 def _load_env_file(path: Path = Path(".env")) -> None:
     """Charge les variables KEY=VALUE de .env sans écraser l'environnement."""
     try:
@@ -30,8 +35,8 @@ def _load_env_file(path: Path = Path(".env")) -> None:
             key, value = key.strip(), value.strip().strip("'\"")
             if key and key not in os.environ:
                 os.environ[key] = value
-    except OSError:
-        pass
+    except OSError as exc:
+        logger.debug("Fichier d'environnement absent ou illisible (%s): %s", path, exc)
 
 
 _load_env_file(Path(__file__).resolve().parent / ".env")
@@ -96,6 +101,7 @@ def run(input_path: str = "data", output_path: str = "results", year: int | None
     if enrich:
         token = os.getenv("IPINFO_TOKEN")
         if not token:
+            logger.info("IPinfo désactivé: token absent.")
             print("IPinfo désactivé : token absent; l'analyse continue sans géolocalisation.")
         elif public_ips:
             print(f"Enrichissement IPinfo : 0/{len(public_ips)} IP publiques…", end="", flush=True)
@@ -112,6 +118,7 @@ def run(input_path: str = "data", output_path: str = "results", year: int | None
                     except Exception as exc:
                         # Un incident d'enrichissement ne doit pas annuler
                         # l'analyse ni la génération des rapports.
+                        logger.exception("Enrichissement ignoré pour %s", ip)
                         print(f"\nAvertissement : enrichissement ignoré pour {ip} : {exc}")
                     print(f"\rEnrichissement IPinfo : {completed}/{len(public_ips)} IP publiques", end="", flush=True)
             print()
@@ -140,6 +147,10 @@ def run(input_path: str = "data", output_path: str = "results", year: int | None
         for event in events:
             writer.writerow({**event, "ips": ",".join(event["ips"])})
     _charts(events, stats, enriched, output)
+    logger.info(
+        "Analyse terminée: %d lignes, %d événements, %d IP uniques.",
+        len(rows), stats["total_events"], stats["unique_ips"],
+    )
     print(f"Analyse terminée : {len(rows)} lignes, {stats['total_events']} événements, {stats['unique_ips']} IP uniques.")
     print(f"Résultats : {output.resolve()}")
     print("\nStatistiques de consommation du compte IPinfo :")

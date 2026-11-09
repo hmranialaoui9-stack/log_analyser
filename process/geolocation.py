@@ -10,6 +10,10 @@ from typing import Any
 
 import requests
 
+from logging_config import get_logger
+
+logger = get_logger("geolocation")
+
 
 def is_public_ip(ip: str) -> bool:
     try:
@@ -46,7 +50,7 @@ def get_location(ip: str, token: str | None = None, cache: dict[str, Any] | None
             )
             if response.status_code == 429:
                 if attempt == 2:
-                    print(f"Avertissement : limite IPinfo atteinte pour {normalized}; IP ignorée.")
+                    logger.warning("Limite IPinfo atteinte pour %s; IP ignorée.", normalized)
                     break
                 try:
                     delay = min(5.0, max(0.0, float(response.headers.get("Retry-After", 2 ** attempt))))
@@ -57,14 +61,14 @@ def get_location(ip: str, token: str | None = None, cache: dict[str, Any] | None
             response.raise_for_status()
             result = response.json()
             if not isinstance(result, dict) or result.get("error"):
-                print(f"Avertissement : réponse IPinfo invalide pour {normalized}; IP ignorée.")
+                logger.warning("Réponse IPinfo invalide pour %s; IP ignorée.", normalized)
                 break
             result.pop("readme", None)
             if cache is not None:
                 cache[normalized] = result
             return result
         except (requests.RequestException, ValueError) as exc:
-            print(f"Avertissement : IPinfo indisponible pour {normalized} : {exc}")
+            logger.warning("IPinfo indisponible pour %s: %s", normalized, exc)
             break
     return None
 
@@ -108,16 +112,20 @@ def get_account_status(token: str | None = None, timeout: float = 8.0) -> dict[s
             values[output_key] = value
         return {"status": "ok", "available": True, **values}
     except requests.Timeout:
+        logger.warning("Délai dépassé lors de la lecture du statut IPinfo.")
         return {"status": "timeout", "available": False,
                 "message": f"Délai dépassé après {timeout:g} secondes."}
     except requests.HTTPError as exc:
         code = exc.response.status_code if exc.response is not None else "inconnu"
+        logger.warning("Erreur HTTP lors de la lecture du statut IPinfo (HTTP %s).", code)
         return {"status": "http_error", "available": False,
                 "message": f"Erreur HTTP IPinfo (HTTP {code})."}
     except ValueError as exc:
+        logger.warning("Réponse de statut IPinfo invalide: %s", exc)
         return {"status": "invalid_response", "available": False,
                 "message": f"Réponse de statut IPinfo invalide : {exc}"}
     except requests.RequestException as exc:
+        logger.warning("Erreur réseau lors de la lecture du statut IPinfo: %s", exc)
         return {"status": "network_error", "available": False,
                 "message": f"Erreur de communication avec IPinfo : {exc}"}
 
@@ -126,7 +134,14 @@ def load_cache(path: str | Path) -> dict[str, Any]:
     try:
         value = json.loads(Path(path).read_text(encoding="utf-8"))
         return value if isinstance(value, dict) else {}
-    except (OSError, json.JSONDecodeError):
+    except FileNotFoundError:
+        logger.debug("Cache IPinfo absent (%s); démarrage avec un cache vide.", path)
+        return {}
+    except json.JSONDecodeError as exc:
+        logger.warning("Cache IPinfo illisible (%s): %s", path, exc)
+        return {}
+    except OSError as exc:
+        logger.warning("Cache IPinfo inaccessible (%s): %s", path, exc)
         return {}
 
 

@@ -5,7 +5,9 @@ from collections import Counter
 import logging
 import unittest
 
-from logging_config import RedactingFormatter
+from logging.handlers import RotatingFileHandler
+
+from logging_config import RedactingFormatter, get_logger, redact_sensitive_text
 from process.extract_transforme import analyze_rows, summarize
 
 
@@ -99,6 +101,26 @@ class SecurityStatisticsTests(unittest.TestCase):
         self.assertNotIn("hunter2", formatted)
         self.assertNotIn("pass123", formatted)
         self.assertIn("[REDACTED]", formatted)
+
+    def test_sensitive_text_helper_redacts_secret_values(self) -> None:
+        redacted = redact_sensitive_text(
+            "token=abc123 password hunter2 https://alice:pass123@example.test"
+        )
+
+        self.assertNotIn("abc123", redacted)
+        self.assertNotIn("hunter2", redacted)
+        self.assertNotIn("pass123", redacted)
+
+    def test_logger_uses_rotating_redacting_handler_without_duplicates(self) -> None:
+        first = get_logger("test_logging")
+        second = get_logger("test_logging")
+
+        self.assertIs(first, second)
+        self.assertEqual(len(first.handlers), 1)
+        self.assertIsInstance(first.handlers[0], RotatingFileHandler)
+        self.assertEqual(first.handlers[0].maxBytes, 2_000_000)
+        self.assertEqual(first.handlers[0].backupCount, 3)
+        self.assertIsInstance(first.handlers[0].formatter, RedactingFormatter)
 
 
 if __name__ == "__main__":

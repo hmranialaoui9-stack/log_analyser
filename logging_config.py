@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import sys
 from logging.handlers import RotatingFileHandler
@@ -14,6 +15,10 @@ _SECRET_PATTERN = re.compile(
 )
 _PASSWORD_PHRASE_PATTERN = re.compile(r"(?i)(\bpassword\s+)(?!for\b)([^\s,;]+)")
 _URL_CREDENTIAL_PATTERN = re.compile(r"(?i)(://[^:/\s]+:)([^@/\s]+)(@)")
+_LOG_LEVELS = {
+    name: getattr(logging, name)
+    for name in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+}
 
 
 def _redact(text: str) -> str:
@@ -42,7 +47,8 @@ def get_logger(module_name: str) -> logging.Logger:
     resolved_name = Path(sys.argv[0]).stem if module_name == "__main__" else module_name
     filename = resolved_name.rsplit(".", 1)[-1]
     logger = logging.getLogger(f"log_analyser.{resolved_name}")
-    logger.setLevel(logging.INFO)
+    configured_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    logger.setLevel(_LOG_LEVELS.get(configured_level, logging.INFO))
     logger.propagate = False
     if not logger.handlers:
         handler = RotatingFileHandler(
